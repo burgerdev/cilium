@@ -1,0 +1,42 @@
+name: Github Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release tag
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Get release tag
+        id: tag
+        run: |
+          if [ -z "${{ github.event.inputs.tag }}" ]
+          then
+          echo tag=${GITHUB_REF##*/} >> $GITHUB_OUTPUT
+          else
+          echo tag=${{ github.event.inputs.tag }}>> $GITHUB_OUTPUT
+          fi
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          fetch-depth: 0
+          show-progress: false
+      - name: Create source archive
+        run: git archive --format=tar.gz -o cilium.tar.gz ${{ steps.tag.outputs.tag }}
+      - name: Create release and attach tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view ${{ steps.tag.outputs.tag }}; then
+            gh release create --prerelease ${{ steps.tag.outputs.tag }}
+          fi
+          gh release upload --clobber ${{ steps.tag.outputs.tag }} cilium.tar.gz
